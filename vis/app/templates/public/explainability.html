@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<!--
+ - File              : explainability.html
+ - Author            : Pranava Madhyastha <pranava@imperial.ac.uk>
+ - Date              : 01.11.2020
+ - Last Modified Date: 10.02.2021
+ - Last Modified By  : Pranava Madhyastha <pranava@imperial.ac.uk>
+-->
+<html lang="en">
+<head>
+    <! -- third party css access --!>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multimodal Hate Speech Detection</title>
+</head>
+<body>
+    <div class="col-6">
+        <h1>Multimodal Hate Speech Detection - About Explainability</h1>
+        <p>The goal of explainability is to provide reasoning for a decision, that can be understood by humans.</p>
+        <p>In our case, we use a method called <a href="https://arxiv.org/abs/1610.02391">Grad-CAM</a>. Grad-CAM identifies the components of the input that were key in making the prediction, such as key tokens in the phrases, or key regions in the image.</p>
+        <p>This information is displayed as a heatmap over the image and tokens, which shows the importance of each component of the input.</p>
+    </div>
+</body>
+</html>
