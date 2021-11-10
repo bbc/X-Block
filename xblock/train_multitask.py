@@ -176,13 +176,6 @@ if __name__ == "__main__":
         default=1,
         help="Number of process participating in job",
     )
-    parser.add_argument(
-            "fusion approach: attention (0) or concatenation (1)",
-            type=int,
-            default=1,
-            help="type of multimodal fusion - attention or concatenation
-            (concatenation preferred)"
-    )
 
 
     args = parser.parse_args()

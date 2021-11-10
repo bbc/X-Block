@@ -98,13 +98,6 @@ if __name__ == "__main__":
         help="Dropout prob in fully connceted layers in transformer",
     )
     parser.add_argument(
-            "fusion approach: attention (0) or concatenation (1)",
-            type=int,
-            default=1,
-            help="type of multimodal fusion - attention or concatenation
-            (concatenation preferred)"
-    )
-    parser.add_argument(
         "--attention_probs_dropout_prob",
         type=float,
         default=0.1,
