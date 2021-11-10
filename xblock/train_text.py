@@ -3,8 +3,32 @@
 # File              : train_text.py
 # Author            : Pranava Madhyastha <pranava@imperial.ac.uk>
 # Date              : 01.11.2020
-# Last Modified Date: 10.02.2021
+# Last Modified Date: 09.11.2021
 # Last Modified By  : Pranava Madhyastha <pranava@imperial.ac.uk>
+#
+# Copyright (c) 2020, Imperial College, London
+# All rights reserved.
+# Redistribution and use in source and binary forms, with or without modification,
+# are permitted provided that the following conditions are met:
+#   1. Redistributions of source code must retain the above copyright notice, this
+#      list of conditions and the following disclaimer.
+#   2. Redistributions in binary form must reproduce the above copyright notice,
+#      this list of conditions and the following disclaimer in the documentation
+#      and/or other materials provided with the distribution.
+#   3. Neither the name of Imperial College nor the names of its contributors may
+#      be used to endorse or promote products derived from this software without
+#      specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+# TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # text only code base for benchmarking
 
 import argparse
@@ -14,7 +38,13 @@ import warnings
 from datetime import datetime
 import logging
 
-# import third-party libraries
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+import transformers
+from transformers import AutoConfig
+from tqdm import tqdm
+import numpy as np
 
 from models.text_only import TextOnlyClassification
 from data.datareader import read_jsonl_alt
@@ -22,7 +52,9 @@ from data.dataset import ToxDataset
 from utils.metrics import acc_pre_rec
 from utils.weighted_loss import classweight
 
+transformers.logger.setLevel(transformers.logging.ERROR)
 warnings.filterwarnings("ignore")
+logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
 
 
 if __name__ == "__main__":
@@ -128,7 +160,7 @@ if __name__ == "__main__":
         os.mkdir(traindir)
     if not os.path.isdir(valdir):
         os.mkdir(valdir)
-    device = third_party.device("cuda") if third_party.cuda.is_available() else third_party.device("cpu")
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     model = TextOnlyClassification(
         args.huggingface_model,
@@ -137,14 +169,14 @@ if __name__ == "__main__":
     ).to(device)
     if args.multi_gpu:
         if args.distributed_parallel:
-            third_party.distributed.init_process_group(
+            torch.distributed.init_process_group(
                 "nccl", rank=args.local_rank, world_size=args.world_size
             )
-            model = third_party.parallel.DistributedDataParallel(model, device_ids=args.gpu_ids)
+            model = nn.parallel.DistributedDataParallel(model, device_ids=args.gpu_ids)
         else:
-            model = third_party.DataParallel(model, device_ids=args.gpu_ids)
+            model = nn.DataParallel(model, device_ids=args.gpu_ids)
     # optimizer taken from huggingface defaults
-    optimizer = third_party.optim.Radam(
+    optimizer = torch.optim.AdamW(
         model.parameters(), lr=5e-5, betas=(0.9, 0.999), eps=1e-8
     )
 
@@ -154,14 +186,14 @@ if __name__ == "__main__":
         tokenizer=args.huggingface_model,
         read_img=False,
     )
-    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size)
+    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=PadCollate())
     dataset_val = ToxDataset(
         read_jsonl_alt(args.val_data),
         text_only=1,
         tokenizer=args.huggingface_model,
         read_img=False,
     )
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size)
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=PadCollate())
 
     if args.multi_gpu:
         model.module.model.save_pretrained(args.save_dir)
@@ -169,7 +201,7 @@ if __name__ == "__main__":
         model.model.save_pretrained(args.save_dir)
     dataset_train.tokenizer.save_pretrained(args.save_dir)
 
-    loss = third_party.BCELoss(reduction="none")
+    loss = nn.BCELoss(reduction="none")
 
     best_val_loss = math.inf
     best_train_loss = math.inf  # temporary, this has to fixed
@@ -186,7 +218,7 @@ if __name__ == "__main__":
         train_prec = 0.0
         train_rec = 0.0
 
-        for idx, batch in third_party(enumerate(dataloader_train)):
+        for idx, batch in tqdm(enumerate(dataloader_train)):
             if not idx % 100:
                 print(f"Step: {idx}/{len(dataloader_train)}")
             optimizer.zero_grad()
@@ -228,14 +260,14 @@ if __name__ == "__main__":
                 model.model.save_pretrained(args.save_dir)
 
         # validate
-        with third_party.no_grad():
+        with torch.no_grad():
             model.eval()
             val_loss = 0.0
             val_acc = 0.0
             val_prec = 0.0
             val_rec = 0.0
 
-            for idx, batch in third_party(enumerate(dataloader_val)):
+            for idx, batch in tqdm(enumerate(dataloader_val)):
                 preds = model.forward(
                     batch["embeddings"].to(device), batch["attn"].squeeze(1).to(device)
                 )

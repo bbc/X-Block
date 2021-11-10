@@ -3,13 +3,47 @@
 # File              : dataset.py
 # Author            : Pranava Madhyastha <pranava@imperial.ac.uk>
 # Date              : 01.11.2020
-# Last Modified Date: 10.02.2021
+# Last Modified Date: 09.11.2021
 # Last Modified By  : Pranava Madhyastha <pranava@imperial.ac.uk>
+#
+# Copyright (c) 2020, Imperial College, London
+# All rights reserved.
+# Redistribution and use in source and binary forms, with or without modification,
+# are permitted provided that the following conditions are met:
+#   1. Redistributions of source code must retain the above copyright notice, this
+#      list of conditions and the following disclaimer.
+#   2. Redistributions in binary form must reproduce the above copyright notice,
+#      this list of conditions and the following disclaimer in the documentation
+#      and/or other materials provided with the distribution.
+#   3. Neither the name of Imperial College nor the names of its contributors may
+#      be used to endorse or promote products derived from this software without
+#      specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+# TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
 # this library provides support for the primary dataset class
 
 import random
 
-# import third-party libraries
+import numpy as np
+import pandas as pd
+import torch
+import cv2
+import pytesseract
+from PIL import Image
+from transformers import AutoTokenizer, AutoConfig
+from torch.utils.data import DataLoader, Dataset
+from torchvision import transforms
+
 class ToxDataset(Dataset):
     def __init__(
         self,
@@ -44,7 +78,7 @@ class ToxDataset(Dataset):
             read_title: whether to read the title from the dataframe
             read_img: whether to read the image (and any text in the image) from the dataframe
         """
-        if isinstance(dataframes, third_party.DataFrame):
+        if isinstance(dataframes, pd.DataFrame):
             # then there is a single data source
             self.dataframes = [dataframes]
             self.selection_probs = [1.0]
@@ -57,16 +91,16 @@ class ToxDataset(Dataset):
                 else [1.0 / len(dataframes) for _ in range(len(dataframes))]
             )
         self.max_sequence_length = (
-            third_party.from_pretrained(tokenizer).max_position_embeddings
+            AutoConfig.from_pretrained(tokenizer).max_position_embeddings
             if max_sequence_length is None and not language_model
-            else third_party.from_pretrained(tokenizer).max_position_embeddings // 2 - 1
+            else AutoConfig.from_pretrained(tokenizer).max_position_embeddings // 2 - 1
             if max_sequence_length is None and language_model
             else max_sequence_length
         )
         if self.max_sequence_length == 514:
             # this fixes distil roberta
             self.max_sequence_length = 512
-        self.tokenizer = third_party.from_pretrained(tokenizer)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
         if self.tokenizer.pad_token is None:
             # if using gpt or something
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -78,7 +112,7 @@ class ToxDataset(Dataset):
         if test:
             # if testing we want to check all of the examples, and not massage etc
             examples_per_class = [len(df) for df in self.dataframes]
-            self.dataframes = third_party.concat(self.dataframes)
+            self.dataframes = pd.concat(self.dataframes)
             self.dataframes["task_index"] = sum(
                 [[task] * num for task, num in enumerate(examples_per_class)], []
             )
@@ -107,8 +141,8 @@ class ToxDataset(Dataset):
         # elements represent text, title, image, label
         modalities = [1, 1, 1, 1]
 
-        if self.read_text and "text" in data and not third_party.isna(data.text) and data.text:
-            encoding = third_party.cat(
+        if self.read_text and "text" in data and not pd.isna(data.text) and data.text: 
+            encoding = torch.cat(
                 (
                     self.tokenizer.encode(
                         data.text,
@@ -117,25 +151,25 @@ class ToxDataset(Dataset):
                         truncation=True,
                         return_tensors="pt",
                     ).flatten(),
-                    third_party.tensor([self.tokenizer.pad_token_id]),
+                    torch.tensor([self.tokenizer.pad_token_id]),
                 )
             )
-            if encoding.size() == third_party.Size([1, 0]):
-                encoding = third_party.full((1,), self.pad_token_id, dtype=third_party.long)
-            mask = third_party.zeros(encoding.size(), dtype=third_party.float)
+            if encoding.size() == torch.Size([1, 0]):
+                encoding = torch.full((1,), self.pad_token_id, dtype=torch.long)
+            mask = torch.zeros(encoding.size(), dtype=torch.float)
             mask[encoding != self.pad_token_id] = 1
         else:
-            encoding = third_party.zeros(1, dtype=third_party.long)
-            mask = encoding.clone().type(third_party.float)
+            encoding = torch.zeros(1, dtype=torch.long)
+            mask = encoding.clone().type(torch.float)
             modalities[0] = 0
 
         if (
             self.read_title
             and "title" in data
-            and not third_party.isna(data.title)
+            and not pd.isna(data.title)
             and data.title
         ):
-            title = third_party.cat(
+            title = torch.cat(
                 (
                     self.tokenizer.encode(
                         data.title,
@@ -144,24 +178,24 @@ class ToxDataset(Dataset):
                         truncation=True,
                         return_tensors="pt",
                     ).flatten(),
-                    third_party.tensor([self.tokenizer.pad_token_id]),
+                    torch.tensor([self.tokenizer.pad_token_id]),
                 )
             )
-            if title.size() == third_party.Size([1, 0]):
-                title = third_party.full((1,), self.pad_token_id, dtype=third_party.long)
-            title_mask = third_party.zeros(title.size(), dtype=third_party.float)
+            if title.size() == torch.Size([1, 0]):
+                title = torch.full((1,), self.pad_token_id, dtype=torch.long)
+            title_mask = torch.zeros(title.size(), dtype=torch.float)
             title_mask[title != self.pad_token_id] = 1
         else:
-            title = third_party.zeros(1, dtype=third_party.long)
-            title_mask = title.clone().type(third_party.float)
+            title = torch.zeros(1, dtype=torch.long)
+            title_mask = title.clone().type(torch.float)
             modalities[1] = 0
 
-        if self.read_img and "img" in data and not third_party.isna(data.img) and data.img:
-            img = third_party.imread(data.img)
+        if self.read_img and "img" in data and not pd.isna(data.img) and data.img:
+            img = cv2.imread(data.img)
             if self.read_img_text:
-                img_text_string = third_party.image_to_string(data.img)
+                img_text_string = pytesseract.image_to_string(data.img)
                 try:
-                    img_text = third_party.cat(
+                    img_text = torch.cat(
                         (
                             self.tokenizer.encode(
                                 img_text_string,
@@ -170,33 +204,33 @@ class ToxDataset(Dataset):
                                 truncation=True,
                                 return_tensors="pt",
                             ).flatten(),
-                            third_party.tensor([self.tokenizer.pad_token_id]),
+                            torch.tensor([self.tokenizer.pad_token_id]),
                         )
                     )
-                    if img_text.size() == third_party.Size([1, 0]):
-                        img_text = third_party.full((1,), self.pad_token_id, dtype=third_party.long)
-                except third_party.third_party.TesseractError:
+                    if img_text.size() == torch.Size([1, 0]):
+                        img_text = torch.full((1,), self.pad_token_id, dtype=torch.long)
+                except pytesseract.pytesseract.TesseractError:
                     # if the image doesn't have dimensions in it's metadata, will throw
                     # an error, this catches
-                    img_text = third_party.full((1,), self.pad_token_id, dtype=third_party.long)
-                img_text_mask = third_party.zeros(img_text.size(), dtype=third_party.float)
+                    img_text = torch.full((1,), self.pad_token_id, dtype=torch.long)
+                img_text_mask = torch.zeros(img_text.size(), dtype=torch.float)
                 img_text_mask[img_text != self.pad_token_id] = 1
             else:
-                img_text = third_party.full((1,), self.pad_token_id, dtype=third_party.long)
-                img_text_mask = third_party.zeros(img_text.size(), dtype=third_party.float)
+                img_text = torch.full((1,), self.pad_token_id, dtype=torch.long)
+                img_text_mask = torch.zeros(img_text.size(), dtype=torch.float)
                 img_text_mask[img_text != self.pad_token_id] = 1
             if self.transforms:
                 img = self.transforms(img)
         else:
-            img = third_party.zeros(3, 1, 1)
-            img_text = third_party.full((1,), self.pad_token_id, dtype=third_party.long)
-            img_text_mask = third_party.zeros(img_text.size(), dtype=third_party.float)
+            img = torch.zeros(3, 1, 1)
+            img_text = torch.full((1,), self.pad_token_id, dtype=torch.long)
+            img_text_mask = torch.zeros(img_text.size(), dtype=torch.float)
             img_text_mask[img_text != self.pad_token_id] = 1
             if self.transforms:
                 img = self.transforms(img)
             modalities[2] = 0
 
-        if "label" in data and not third_party.isna(data.label):
+        if "label" in data and not pd.isna(data.label):
             label = [data.label]
         else:
             label = [-1]
@@ -210,7 +244,7 @@ class ToxDataset(Dataset):
             "attn": mask,
             "title": title,
             "title_attn": title_mask,
-            "label": third_party.FloatTensor(label),
-            "task_indices": third_party.LongTensor([task_indices]),
-            "modalities": third_party.LongTensor(modalities),
+            "label": torch.FloatTensor(label),
+            "task_indices": torch.LongTensor([task_indices]),
+            "modalities": torch.LongTensor(modalities),
         }
