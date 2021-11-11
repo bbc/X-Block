@@ -40,6 +40,7 @@ import logging
 
 
 from models.multitask import MultitaskModel
+from data.datacollator import PadCollate
 from data.datareader import read_jsonl_alt
 from data.dataset import ToxDataset
 from utils.metrics import acc_pre_rec
@@ -53,10 +54,11 @@ import transformers
 from transformers import AutoConfig
 from tqdm import tqdm
 
-transformers.logger.setLevel(transformers.logging.ERROR)
+transformers.logging.set_verbosity_error()
 warnings.filterwarnings("ignore")
 logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
-
+# disable massive warning from huggingface tokenizer
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -195,7 +197,7 @@ if __name__ == "__main__":
         else None,
     )
     dataloader_train = DataLoader(
-        dataset_train, batch_size=args.batch_size, shuffle=True
+        dataset_train, batch_size=args.batch_size, shuffle=True, collate_fn=PadCollate()
     )
     dataset_val = ToxDataset(
         [read_jsonl_alt(df) for df in args.val_data],
@@ -206,7 +208,7 @@ if __name__ == "__main__":
         else None,
         test=True,
     )
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size)
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=PadCollate())
 
     task_output_dims = [
         len(df.label.unique()) if len(df.label.unique()) != 2 else 1
