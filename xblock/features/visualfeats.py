@@ -30,6 +30,7 @@
 # TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import torch
 import torch.nn as nn
 from torchvision.models import vgg16, resnet18, mobilenet_v2
 
@@ -37,7 +38,7 @@ from torchvision.models import vgg16, resnet18, mobilenet_v2
 class VGG(nn.Module):
     def __init__(self):
         super(VGG, self).__init__(pretrained=True, kernel_size=3)
-        self.vgg = vgg16(pretrained=pretrained)
+        self.vgg = vgg16(pretrained=True)
         self.model = torch.nn.Sequential(*(list(self.vgg.children())[:-1]))
         self.pooling = torch.nn.MaxPool2d(kernel_size=3)
         self.flat_layer = nn.Flatten()

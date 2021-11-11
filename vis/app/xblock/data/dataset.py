@@ -3,13 +3,47 @@
 # File              : dataset.py
 # Author            : Pranava Madhyastha <pranava@imperial.ac.uk>
 # Date              : 01.11.2020
-# Last Modified Date: 10.02.2021
+# Last Modified Date: 09.11.2021
 # Last Modified By  : Pranava Madhyastha <pranava@imperial.ac.uk>
+#
+# Copyright (c) 2020, Imperial College, London
+# All rights reserved.
+# Redistribution and use in source and binary forms, with or without modification,
+# are permitted provided that the following conditions are met:
+#   1. Redistributions of source code must retain the above copyright notice, this
+#      list of conditions and the following disclaimer.
+#   2. Redistributions in binary form must reproduce the above copyright notice,
+#      this list of conditions and the following disclaimer in the documentation
+#      and/or other materials provided with the distribution.
+#   3. Neither the name of Imperial College nor the names of its contributors may
+#      be used to endorse or promote products derived from this software without
+#      specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+# TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
 # library for processing dataset; contains the main toxdataset class
 
-# import third_party libraries
 from pad import pad_sequences
 
+import random
+import numpy as np
+import pandas as pd
+import torch
+import cv2
+import pytesseract
+from PIL import Image
+from transformers import AutoTokenizer, AutoConfig
+from torch.utils.data import DataLoader, Dataset
+from torchvision import transforms
 
 class ToxDataset(Dataset):
     def __init__(
@@ -33,7 +67,7 @@ class ToxDataset(Dataset):
             max_sequence_length: maximum number of tokens in sequence, will default to the max
                 number allowed in the specified transformer
         """
-        if isinstance(dataframes, third_party.DataFrame):
+        if isinstance(dataframes, pd.DataFrame):
             # then there is a single data source
             self.dataframes = [dataframes]
             self.selection_probs = [1.0]
@@ -67,7 +101,7 @@ class ToxDataset(Dataset):
         # elements represent text, title, image, label
         modalities = [1, 1, 1, 1]
 
-        if "text" in data and not third_party.isna(data.text):
+        if "text" in data and not pd.isna(data.text):
             encoding = pad_sequences(
                 [self.tokenizer.encode(data.text)],
                 maxlen=self.max_sequence_length,
@@ -76,11 +110,11 @@ class ToxDataset(Dataset):
             mask = encoding.copy()
             mask[mask > 0] = 1
         else:
-            encoding = third_party.zeros(self.max_sequence_length, dtype=third_party.long)
-            mask = encoding.clone().type(third_party.float)
+            encoding = torch.zeros(self.max_sequence_length, dtype=torch.long)
+            mask = encoding.clone().type(torch.float)
             modalities[0] = 0
 
-        if "title" in data and not third_party.isna(data.title):
+        if "title" in data and not pd.isna(data.title):
             title = pad_sequences(
                 [self.tokenizer.encode(data.title)],
                 maxlen=self.max_sequence_length,
@@ -89,14 +123,14 @@ class ToxDataset(Dataset):
             title_mask = title.copy()
             title_mask[title_mask > 0] = 1
         else:
-            title = third_party.zeros(self.max_sequence_length, dtype=third_party.long)
-            title_mask = title.clone().type(third_party.float)
+            title = torch.zeros(self.max_sequence_length, dtype=torch.long)
+            title_mask = title.clone().type(torch.float)
             modalities[1] = 0
 
-        if "img" in data and not third_party.isna(data.img):
-            img = third_party.imread(data.img)
+        if "img" in data and not pd.isna(data.img):
+            img = cv2.imread(data.img)
             img_text = pad_sequences(
-                [self.tokenizer.encode(third_party.image_to_string(data.img))],
+                [self.tokenizer.encode(pytesseract.image_to_string(data.img))],
                 maxlen=self.max_sequence_length,
                 padding="post",
             )
@@ -105,7 +139,7 @@ class ToxDataset(Dataset):
             if self.transforms:
                 img = self.transforms(img)
         else:
-            img = third_party.zeros(3, 1, 1)
+            img = torch.zeros(3, 1, 1)
             img_text = pad_sequences(
                 [""], maxlen=self.max_sequence_length, padding="post"
             )
@@ -115,7 +149,7 @@ class ToxDataset(Dataset):
                 img = self.transforms(img)
             modalities[2] = 0
 
-        if "label" in data and not third_party.isna(data.label):
+        if "label" in data and not pd.isna(data.label):
             label = [data.label]
         else:
             label = [-1]
@@ -123,14 +157,14 @@ class ToxDataset(Dataset):
 
         return {
             "image": img,
-            "img_text": third_party.LongTensor(img_text),
-            "img_text_attn": third_party.FloatTensor(img_text_mask),
-            "embeddings": third_party.LongTensor(encoding),
-            "attn": third_party.FloatTensor(mask),
-            "title": third_party.LongTensor(title),
-            "title_attn": third_party.FloatTensor(title_mask),
-            "label": third_party.FloatTensor(label),
-            "task_indices": third_party.LongTensor([task_indices]),
-            "modalities": third_party.LongTensor(modalities),
+            "img_text": torch.LongTensor(img_text),
+            "img_text_attn": torch.FloatTensor(img_text_mask),
+            "embeddings": torch.LongTensor(encoding),
+            "attn": torch.FloatTensor(mask),
+            "title": torch.LongTensor(title),
+            "title_attn": torch.FloatTensor(title_mask),
+            "label": torch.FloatTensor(label),
+            "task_indices": torch.LongTensor([task_indices]),
+            "modalities": torch.LongTensor(modalities),
         }
 

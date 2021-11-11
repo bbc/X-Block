@@ -32,6 +32,7 @@
 
 from transformers import BertModel
 import torch.nn as nn
+import torch.nn.functional as F
 
 class BERTFeats(nn.Module):
     def __init__(self):

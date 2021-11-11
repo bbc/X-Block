@@ -3,12 +3,39 @@
 # File              : multistream.py
 # Author            : Pranava Madhyastha <pranava@imperial.ac.uk>
 # Date              : 01.11.2020
-# Last Modified Date: 10.02.2021
+# Last Modified Date: 09.11.2021
 # Last Modified By  : Pranava Madhyastha <pranava@imperial.ac.uk>
-# multiple stream model that supports a variety of input modalities including
-# title, comment, image, image text
+#
+# Copyright (c) 2020, Imperial College, London
+# All rights reserved.
+# Redistribution and use in source and binary forms, with or without modification,
+# are permitted provided that the following conditions are met:
+#   1. Redistributions of source code must retain the above copyright notice, this
+#      list of conditions and the following disclaimer.
+#   2. Redistributions in binary form must reproduce the above copyright notice,
+#      this list of conditions and the following disclaimer in the documentation
+#      and/or other materials provided with the distribution.
+#   3. Neither the name of Imperial College nor the names of its contributors may
+#      be used to endorse or promote products derived from this software without
+#      specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+# TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# primary codebase for multistream model - takes in input from a variety of streams
 
-# import third-party libraries
+import torch
+import torch.nn as nn
+from torchvision.models import resnet152
+from transformers import AutoModel, AutoConfig
 
 class MultiStreamModel(nn.Module):
     def __init__(
@@ -36,34 +63,29 @@ class MultiStreamModel(nn.Module):
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
         )
-
-        # third party calls
-        self.transformer = third_party.from_pretrained(transformer, config=config)
-        self.image_cnn = third_party.Sequential(
+        self.transformer = AutoModel.from_pretrained(transformer, config=config)
+        self.image_cnn = nn.Sequential(
             *list(resnet152(pretrained=True).children())[:-2]
         )
-        self.image_pool = third_party.AvgPool2d((7, 7))
+        self.image_pool = nn.AvgPool2d((7, 7))
 
-        self.comment_proj = third_party.Linear(self.transformer.config.hidden_size, 200)
-        self.title_proj = third_party.Linear(self.transformer.config.hidden_size, 200)
-        self.image_text_proj = third_party.Linear(self.transformer.config.hidden_size, 200)
-        self.image_proj = third_party.Linear(2048, 200)
-        self.feature_dropout = third_party.Dropout(projection_dropout)
+        self.comment_proj = nn.Linear(self.transformer.config.hidden_size, 200)
+        self.title_proj = nn.Linear(self.transformer.config.hidden_size, 200)
+        self.image_text_proj = nn.Linear(self.transformer.config.hidden_size, 200)
+        self.image_proj = nn.Linear(2048, 200)
+        self.feature_dropout = nn.Dropout(projection_dropout)
 
-        self.projection = third_party.Sequential(
-            third_party.Dropout(projection_dropout),
-            third_party.Linear(feature_dim * 4, combine_dim),
-            third_party.ReLU(),
-            third_party.Dropout(projection_dropout),
-            third_party.Linear(combine_dim, combine_dim),
-            third_party.ReLU(),
-            third_party.Dropout(projection_dropout),
-            third_party.Linear(combine_dim, 1),
-            third_party.Sigmoid(),
+        self.projection = nn.Sequential(
+            nn.Dropout(projection_dropout),
+            nn.Linear(feature_dim * 4, combine_dim),
+            nn.ReLU(),
+            nn.Dropout(projection_dropout),
+            nn.Linear(combine_dim, combine_dim),
+            nn.ReLU(),
+            nn.Dropout(projection_dropout),
+            nn.Linear(combine_dim, 1),
+            nn.Sigmoid(),
         )
-        # third party call ends
-
-
         self.feature_dim = feature_dim
 
     def forward(
@@ -104,7 +126,7 @@ class MultiStreamModel(nn.Module):
                 )
             )
             if comment is not None
-            else third_party.zeros(batch_size, self.feature_dim)
+            else torch.zeros(batch_size, self.feature_dim)
         )
         title_feats = (
             self.title_proj(
@@ -117,7 +139,7 @@ class MultiStreamModel(nn.Module):
                 )
             )
             if title is not None
-            else third_party.zeros(batch_size, self.feature_dim)
+            else torch.zeros(batch_size, self.feature_dim)
         )
         image_text_feats = (
             self.image_text_proj(
@@ -130,7 +152,7 @@ class MultiStreamModel(nn.Module):
                 )
             )
             if image_text is not None
-            else third_party.zeros(batch_size, self.feature_dim)
+            else torch.zeros(batch_size, self.feature_dim)
         )
         image_feats = (
             self.image_proj(
@@ -139,10 +161,10 @@ class MultiStreamModel(nn.Module):
                 )
             )
             if image is not None
-            else third_party.zeros(batch_size, self.feature_dim)
+            else torch.zeros(batch_size, self.feature_dim)
         )
 
-        combine = third_party.cat(
+        combine = torch.cat(
             (comment_feats, title_feats, image_text_feats, image_feats), dim=1
         )
 

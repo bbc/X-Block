@@ -3,11 +3,42 @@
 # File              : evaluate.py
 # Author            : Pranava Madhyastha <pranava@imperial.ac.uk>
 # Date              : 01.11.2020
-# Last Modified Date: 10.02.2021
+# Last Modified Date: 09.11.2021
 # Last Modified By  : Pranava Madhyastha <pranava@imperial.ac.uk>
+#
+# Copyright (c) 2020, Imperial College, London
+# All rights reserved.
+# Redistribution and use in source and binary forms, with or without modification,
+# are permitted provided that the following conditions are met:
+#   1. Redistributions of source code must retain the above copyright notice, this
+#      list of conditions and the following disclaimer.
+#   2. Redistributions in binary form must reproduce the above copyright notice,
+#      this list of conditions and the following disclaimer in the documentation
+#      and/or other materials provided with the distribution.
+#   3. Neither the name of Imperial College nor the names of its contributors may
+#      be used to endorse or promote products derived from this software without
+#      specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+# TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
 # multistream, multitask evaluation code
 
-# import third_party libraries
+import tqdm
+import torch
+import torch.nn as nn
+from torchvision import transforms
+from transformers import AutoTokenizer
+from keras_preprocessing.sequence import pad_sequences
+import pytesseract
 
 from pad import pad_sequences
 from .mmtox.models.multitask import MultitaskModel
@@ -18,20 +49,20 @@ from .mmtox.data.dataset import ToxDataset
 class ModelInference:
     def __init__(self, model_weights, tokenizer="distilbert-base-uncased"):
         # load the model
-        self.device = third_party.device(
-            "cuda" if third_party.cuda.is_available() else "cpu"
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
         )
         self.model = MultitaskModel(model_weights).to(self.device)
         self.model.load_model(model_weights)
         self.model.eval()
-        self.image_transform = third_party.Compose(
+        self.image_transform = transforms.Compose(
             [
-                third_party.ToPILImage(),
-                third_party.Resize((224, 224)),
-                third_party.ToTensor(),
+                transforms.ToPILImage(),
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
             ]
         )
-        self.tokenizer = third_party.from_pretrained(tokenizer)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
 
     def predict_hatespeech_form(
             self,
@@ -54,15 +85,15 @@ class ModelInference:
         Returns:
             binary classification of hatespeech
         """
-        modalities = third_party.tensor([[1, 1, 1, 0]])
+        modalities = torch.tensor([[1, 1, 1, 0]])
         if comment is not None:
             embeddings = pad_sequences(
                 [self.tokenizer.encode(comment)], maxlen=100, padding="post"
             )
             mask = embeddings.copy()
             mask[mask > 0] = 1
-            mask = third_party.FloatTensor(mask).to(self.device)
-            embeddings = third_party.LongTensor(embeddings).to(self.device)
+            mask = torch.FloatTensor(mask).to(self.device)
+            embeddings = torch.LongTensor(embeddings).to(self.device)
         else:
             embeddings = None
             mask = None
@@ -74,22 +105,22 @@ class ModelInference:
             )
             title_mask = title.copy()
             title_mask[title_mask > 0] = 1
-            title_mask = third_party.FloatTensor(title_mask).to(self.device)
-            title = third_party.LongTensor(title).to(self.device)
+            title_mask = torch.FloatTensor(title_mask).to(self.device)
+            title = torch.LongTensor(title).to(self.device)
         else:
             title_mask = None
             modalities[:, 1] = 0
 
         if image is not None:
             image_text = pad_sequences(
-                [self.tokenizer.encode(third_party.image_to_string(image))],
+                [self.tokenizer.encode(pytesseract.image_to_string(image))],
                 maxlen=100,
                 padding="post",
             )
             image_text_mask = image_text.copy()
             image_text_mask[image_text_mask > 0] = 1
-            image_text_mask = third_party.FloatTensor(image_text_mask).to(self.device)
-            image_text = third_party.LongTensor(image_text).to(self.device)
+            image_text_mask = torch.FloatTensor(image_text_mask).to(self.device)
+            image_text = torch.LongTensor(image_text).to(self.device)
             if explainability:
                 # for reshaping the heatmap at output
                 orig_img_size = image.shape
@@ -100,7 +131,7 @@ class ModelInference:
             modalities[:, 2] = 0
 
         out = self.model.forward(
-            third_party.tensor([[0]]),
+            torch.tensor([[0]]),
             comment=embeddings,
             comment_attn=mask,
             image=image,
@@ -139,11 +170,11 @@ class ModelInference:
                         self.model.image_grad.squeeze()[0]
                         * self.model.image_activation.squeeze().detach()
                 ).mean(dim=0)
-                heatmap_transform = third_party.Compose(
+                heatmap_transform = transforms.Compose(
                     [
-                        third_party.ToPILImage(),
-                        third_party.Resize(orig_img_size[:2]),
-                        third_party.ToTensor(),
+                        transforms.ToPILImage(),
+                        transforms.Resize(orig_img_size[:2]),
+                        transforms.ToTensor(),
                     ]
                 )
                 ret["img_heatmap"] = heatmap_transform(
@@ -152,6 +183,7 @@ class ModelInference:
 
         return ret
 
+    @torch.no_grad()
     def predict_hatespeech_file(self, file):
         """Predict the probability that the given text-image pairs
         in the file constitute hatespeech
@@ -168,7 +200,7 @@ class ModelInference:
 
         preds = []
         probs = []
-        for batch in third_party(dataloader):
+        for batch in tqdm(dataloader):
             img, embeddings = (
                 batch["image"].to(self.device),
                 batch["embeddings"].to(self.device),
