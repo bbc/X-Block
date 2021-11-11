@@ -32,4 +32,5 @@ tqdm==4.50.0
 transformers==4.8.2
 typing-extensions==3.10.0.0
 urllib3==1.26.4
+wandb==0.12.6
 Werkzeug==1.0.1
