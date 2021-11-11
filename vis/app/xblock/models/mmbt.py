@@ -63,7 +63,6 @@ class MMBT(nn.Module):
         self.head_mask = [None] * self.transformer.config.num_hidden_layers
 
         self.image_feats = TransformerImageFeats()
-
         self.img_emb_proj = nn.Linear(2048, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(2, config.hidden_size)
 
@@ -79,7 +78,7 @@ class MMBT(nn.Module):
                     :,
                     : min(
                         self.transformer.config.max_position_embeddings - 9,
-                        text.size(2),
+                        text.size(1),
                     ),
                 ],
                 self.img_emb_proj(self.image_feats(image)),
@@ -121,7 +120,7 @@ class MMBT(nn.Module):
                     :,
                     : min(
                         self.transformer.config.max_position_embeddings - 9,
-                        text.size(2),
+                        text.size(1),
                     ),
                 ],
                 torch.ones(len(attn), 9, device=self.transformer.device),
