@@ -91,6 +91,7 @@ class MultitaskModel(nn.Module):
             [nn.Linear(combine_dim, i) for i in output_dims]
         )
         self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax()
         self.feature_dim = feature_dim
 
     def forward(
@@ -104,8 +105,9 @@ class MultitaskModel(nn.Module):
         image_text_attn=None,
         image=None,
         modalities=None,
+        explainability=False,
     ):
-        """
+        """        
         Args:
             task_indices: the task that each example corresponds to
             modalities: give the indices that are avaliable at each data point
@@ -118,7 +120,13 @@ class MultitaskModel(nn.Module):
             transformer_output = self.transformer(
                 input_ids=comment[modalities[:, 0] == 1],
                 attention_mask=comment_attn[modalities[:, 0] == 1],
-            )[-1]
+            )
+            hiddens = transformer_output[0]
+            transformer_output = transformer_output[-1]
+            
+            if explainability:
+                h_comment = hiddens.register_hook(self.assign_comment_grad)
+                self.comment_activation = hiddens
             comment_feats[modalities[:, 0] == 1] = self.comment_layernorm(
                 self.comment_proj(
                     self.feature_dropout(
@@ -133,7 +141,13 @@ class MultitaskModel(nn.Module):
             transformer_output = self.transformer(
                 input_ids=title[modalities[:, 1] == 1],
                 attention_mask=title_attn[modalities[:, 1] == 1],
-            )[-1]
+            )
+            hiddens = transformer_output[0]
+            transformer_output = transformer_output[-1]
+            
+            if explainability:
+                h_title = hiddens.register_hook(self.assign_title_grad)
+                self.title_activation = hiddens
             title_feats[modalities[:, 1] == 1] = self.title_layernorm(
                 self.title_proj(
                     self.feature_dropout(
@@ -165,15 +179,30 @@ class MultitaskModel(nn.Module):
             )
         image_feats = torch.zeros_like(comment_feats)
         if image is not None and (modalities[:, 2] == 1).sum().item():
-            image_feats[modalities[:, 2] == 1] = self.image_layernorm(
-                self.image_proj(
-                    self.feature_dropout(
-                        self.image_cnn(image[modalities[:, 2] == 1]).reshape(
-                            (modalities[:, 2] == 1).sum(), -1
+            if explainability:
+                cnn1_output = self.image_cnn[0](image[modalities[:, 2] == 1])
+                h_image = cnn1_output.register_hook(self.assign_image_grad)
+                self.image_activation = cnn1_output
+                image_feats[modalities[:, 2] == 1] = self.image_layernorm(
+                    self.image_proj(
+                        self.feature_dropout(
+                            self.image_cnn[1:](cnn1_output).reshape(
+                                (modalities[:, 2] == 1).sum(), -1
+                            )
                         )
                     )
                 )
-            )
+                del cnn1_output
+            else:
+                image_feats[modalities[:, 2] == 1] = self.image_layernorm(
+                    self.image_proj(
+                        self.feature_dropout(
+                            self.image_cnn(image[modalities[:, 2] == 1]).reshape(
+                                (modalities[:, 2] == 1).sum(), -1
+                            )
+                        )
+                    )
+                )
 
         if "transformer_output" in locals():
             del transformer_output
@@ -192,8 +221,8 @@ class MultitaskModel(nn.Module):
                     self.task_outputs[task](projection[task_indices[:, 0] == task])
                 )
             else:
-                output[task_indices[:, 0] == task, :dim] = self.task_outputs[task](
-                    projection[task_indices[:, 0] == task]
+                output[task_indices[:, 0] == task, :dim] = self.softmax(
+                    self.task_outputs[task](projection[task_indices[:, 0] == task])
                 )
         return output
 
@@ -238,3 +267,12 @@ class MultitaskModel(nn.Module):
             self.image_layernorm.load_state_dict(
                 torch.load(f"{dir}/image_layernorm.pth")
             )
+
+    def assign_comment_grad(self, grad):
+        self.comment_grad = grad
+
+    def assign_title_grad(self, grad):
+        self.title_grad = grad
+
+    def assign_image_grad(self, grad):
+        self.image_grad = grad
