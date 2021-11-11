@@ -78,7 +78,7 @@ class MMBT(nn.Module):
                     :,
                     : min(
                         self.transformer.config.max_position_embeddings - 9,
-                        text.size(2),
+                        text.size(1),
                     ),
                 ],
                 self.img_emb_proj(self.image_feats(image)),
@@ -120,7 +120,7 @@ class MMBT(nn.Module):
                     :,
                     : min(
                         self.transformer.config.max_position_embeddings - 9,
-                        text.size(2),
+                        text.size(1),
                     ),
                 ],
                 torch.ones(len(attn), 9, device=self.transformer.device),

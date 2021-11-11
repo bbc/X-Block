@@ -32,7 +32,7 @@
 
 import torch
 import torch.nn as nn
-from torchvision.models import vgg16, resnet18, mobilenet_v2
+from torchvision.models import vgg16, resnet18, resnet152, mobilenet_v2
 
 
 class VGG(nn.Module):
@@ -50,12 +50,12 @@ class VGG(nn.Module):
         return out
 
 
-class ResNet(nn.Module):
+class Resnet(nn.Module):
     def __init__(self):
-        super(Resnet, self).__init__(pretrained=True, kernel_size=3)
-        self.resent = resnet18(pretrained=pretrained)
-        self.model = torch.nn.Sequential(*(list(resnet.children())[:-1]))
-        self.pooling = torch.nn.MaxPool2d(kernel_size=kernel_size)
+        super(Resnet, self).__init__()
+        self.resnet = resnet18(pretrained=True)
+        self.model = nn.Sequential(*(list(self.resnet.children())[:-1]))
+        self.pooling = nn.MaxPool2d(kernel_size=3)
         self.flat_layer = nn.Flatten()
 
     def forward(self, x):
@@ -69,8 +69,8 @@ class MobileNet(nn.Module):
     def __init__(self):
         super(MobileNet, self).__init__()
         self.mobilenet = mobilenet_v2(pretrained=True)
-        self.model = torch.nn.Sequential(*(list(mobilenet.children())[:-1]))
-        self.pooling = torch.nn.MaxPool2d(kernel_size=3)
+        self.model = nn.Sequential(*(list(self.mobilenet.children())[:-1]))
+        self.pooling = nn.MaxPool2d(kernel_size=3)
         self.flat_layer = nn.Flatten()
 
     def forward(self, x):
@@ -84,7 +84,7 @@ class EnsembleFeats(nn.Module):
     def __init__(self):
         super(EnsembleFeats, self).__init__()
         self.vgg = VGG()
-        self.res = ResNet()
+        self.res = Resnet()
         self.mobile = MobileNet()
 
         self.fc_layer1 = nn.Sequential(nn.Linear(7680, 6000), nn.BatchNorm1d(6000))

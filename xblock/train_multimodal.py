@@ -47,17 +47,21 @@ from transformers import AutoConfig
 from tqdm import tqdm
 import numpy as np
 from sklearn.utils import class_weight
+import wandb
 
 from models.mmbt import MMBT
+from data.datacollator import PadCollate
 from data.datareader import read_jsonl
 from data.dataset import ToxDataset
 from utils.metrics import acc_pre_rec
-from utils.weighred_loss import classweight
+from utils.weighted_loss import classweight
 
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-transformers.logger.setLevel(transformers.logging.ERROR)
+transformers.logging.set_verbosity_error()
 warnings.filterwarnings("ignore")
 logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
+# disable massive warning from huggingface tokenizer
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 if __name__ == "__main__":
@@ -159,7 +163,7 @@ if __name__ == "__main__":
         transforms=transform,
     )
     dataloader_train = DataLoader(
-        dataset_train, batch_size=args.batch_size, shuffle=True
+        dataset_train, batch_size=args.batch_size, shuffle=True, collate_fn=PadCollate()
     )
     dataset_val = ToxDataset(
         read_jsonl(args.val_data, text_only=0),
@@ -167,7 +171,7 @@ if __name__ == "__main__":
         tokenizer=args.huggingface_model,
         transforms=transform,
     )
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size)
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=PadCollate())
 
     model.save_model(args.save_dir)
     dataset_train.tokenizer.save_pretrained(args.save_dir)
@@ -198,7 +202,7 @@ if __name__ == "__main__":
 
             pred_loss = loss(preds, batch["label"].to(device).detach())
             neg_example_loss_weight, pos_example_loss_weight = classweight(
-                batch["label"], num_classes=2
+                batch["label"].flatten(), num_classes=2
             )
 
             pred_loss[batch["label"].to(device) < 0.5] *= neg_example_loss_weight
@@ -208,7 +212,7 @@ if __name__ == "__main__":
             pred_loss.backward()
             train_loss += pred_loss.item()
 
-            metrics = acc_pre_rec(preds.reshape(-1, 1), batch["label"].reshape(-1, 1))
+            metrics = acc_pre_rec(preds.reshape(-1, 1), batch["label"].to(device).reshape(-1, 1))
             train_acc += metrics["accuracy"]
             train_prec += metrics["precision"]
             train_rec += metrics["recall"]
@@ -222,7 +226,7 @@ if __name__ == "__main__":
 
         if train_loss < best_train_loss:
             best_train_loss = train_loss
-            model.model.save_pretrained(traindir)
+            model.transformer.save_pretrained(traindir)
 
         # validate
         with torch.no_grad():
@@ -250,7 +254,7 @@ if __name__ == "__main__":
                 val_pred_loss = val_pred_loss.mean()
                 val_loss += val_pred_loss.item()
                 metrics = acc_pre_rec(
-                    preds.reshape(-1, 1), batch["label"].reshape(-1, 1)
+                    preds.reshape(-1, 1), batch["label"].to(device).reshape(-1, 1)
                 )
                 val_acc += metrics["accuracy"]
                 val_prec += metrics["precision"]
