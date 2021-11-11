@@ -40,10 +40,10 @@ from transformers import AutoTokenizer
 from keras_preprocessing.sequence import pad_sequences
 import pytesseract
 
-from pad import pad_sequences
-from .mmtox.models.multitask import MultitaskModel
-from .mmtox.data.datareader import read_jsonl
-from .mmtox.data.dataset import ToxDataset
+from .pad import pad_sequences
+from .xblock.models.multitask import MultitaskModel
+from .xblock.data.datareader import read_jsonl
+from .xblock.data.dataset import ToxDataset
 
 
 class ModelInference:

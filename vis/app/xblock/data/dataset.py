@@ -32,7 +32,7 @@
 #
 # library for processing dataset; contains the main toxdataset class
 
-from pad import pad_sequences
+from .pad import pad_sequences
 
 import random
 import numpy as np

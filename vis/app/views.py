@@ -40,7 +40,7 @@ import matplotlib.pyplot as plt
 import random
 from app import app
 from .evaluate import ModelInference
-from .mmtox.visualization.visualize import visualize_lang, visualize_img
+from .xblock.visualization.visualize import visualize_lang, visualize_img
 
 
 model_inference = ModelInference("app/weights/train")
