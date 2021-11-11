@@ -46,13 +46,14 @@ from transformers import AutoConfig
 from tqdm import tqdm
 import numpy as np
 
-from models.text_only import TextOnlyClassification
+from models.textonly import TextOnlyClassification
+from data.datacollator import PadCollate
 from data.datareader import read_jsonl_alt
 from data.dataset import ToxDataset
 from utils.metrics import acc_pre_rec
 from utils.weighted_loss import classweight
 
-transformers.logger.setLevel(transformers.logging.ERROR)
+transformers.logging.set_verbosity_error()
 warnings.filterwarnings("ignore")
 logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
 
