@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<!--
+ - File              : index.html
+ - Author            : Pranava Madhyastha <pranava@imperial.ac.uk>
+ - Date              : 01.11.2020
+ - Last Modified Date: 11.11.2021
+ - Last Modified By  : Pranava Madhyastha <pranava@imperial.ac.uk>
+ -
+ - Copyright (c) 2020, Imperial College, London
+ - All rights reserved.
+ - Redistribution and use in source and binary forms, with or without modification,
+ - are permitted provided that the following conditions are met:
+ -   1. Redistributions of source code must retain the above copyright notice, this
+ -      list of conditions and the following disclaimer.
+ -   2. Redistributions in binary form must reproduce the above copyright notice,
+ -      this list of conditions and the following disclaimer in the documentation
+ -      and/or other materials provided with the distribution.
+ -   3. Neither the name of Imperial College nor the names of its contributors may
+ -      be used to endorse or promote products derived from this software without
+ -      specific prior written permission.
+ -
+ - THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ - ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ - WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ - DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ - FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+ - DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+ - SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
+ - CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+ - TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+ - OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+<html lang="en">
+<head>
+    <!-- third party css call -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multimodal Hate Speech Detection</title>
+</head>
+<body>
+    <div class="col-6">
+        <h1>Multimodal Hate Speech Detection</h1>
+        <form action="./" method="POST" enctype="multipart/form-data">
+            <!-- <div class="form-group">
+                <label for="inputJSONLCSV">Upload JSONL/CSV file</label>
+                <input type="file" class="form-control-file" id="inputJSONLCSV" name="inputJSONLCSV" accept=".jsonl,.csv">
+            </div>
+            <div class="form-group">
+              <label for="inputURL">Enter URL</label>
+              <input type="url" class="form-control" id="inputURL" name="inputURL" placeholder="Enter URL">
+            </div> -->
+            <div class="form-group">
+                <label for="inputTitle">Enter Title</label>
+                <textarea class="form-control" id="inputTitle" name="inputTitle" rows="1" placeholder="Input Title"></textarea>
+              </div>
+            <div class="form-group">
+              <label for="inputText">Enter Text</label>
+              <textarea class="form-control" id="inputText" name="inputText" rows="3" placeholder="Input Text"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="inputImage">Upload Image</label>
+                <input type="file" class="form-control-file" id="inputImage" name="inputImage" accept="image/*">
+            </div>
+            <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="tickExplainability" name="tickExplainability">
+                <label class="form-check-label" for="tickExplainability">Add explainability? (<a href="/explainability">What's this?</a>)</label>
+            </div>
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+        {% if empty_input %}
+            <p>You need to input something!</p>
+        {% endif %}
+        {% if classification %}
+            <p>Hatespeech probability: {{ classification }}%</p>
+        {% endif %}
+        {% if input_text or input_title or input_image %}
+            <p>You entered:</p>
+            {% if input_title %}
+                <p>Title: {{ input_title }}</p>
+            {% endif %}
+            {% if input_text %}
+                <p>Text: {{ input_text }}</p>
+            {% endif %}
+            {% if input_image %}
+                <p>Image: </p><img src="{{ input_image }}" height="400">
+            {% endif %}
+        {% endif %}
+        {% if visualizations %}
+            {% if wordpiece_explanation %}
+                <a href="/wordpiece">Why do my text visualizations have hashes in them?</a>
+            {% endif %}
+            {% for i in range(0, len) %}
+                <p>GradCam {{ visualizations[i][0] }} visualisation</p>
+                <img src="{{ visualizations[i][1] }}" height="400">
+            {% endfor %}
+        {% endif %}
+    </div>
+</body>
+</html>
