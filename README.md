@@ -1,6 +1,6 @@
 # X-Block
 
-This repository contains code for contextual, multimodal toxicity detection.
+This repository contains code for multimodal toxicity detection.
 
 ## Installation
 Requirements:
