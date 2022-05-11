@@ -37,6 +37,7 @@ import os
 import warnings
 from datetime import datetime
 import logging
+import getpass
 
 import torch
 import torch.nn as nn
@@ -80,6 +81,13 @@ if __name__ == "__main__":
         required=True,
         help="Path to the jsonl containing the val data",
     )
+    
+    parser.add_argument('--encrypted',
+        action = 'store_true',
+        default = False,
+        help = 'Indicates that the input files are encrypted using AES-256'
+    )
+    
     parser.add_argument(
         "--pos_example_loss_weight",
         type=float,
@@ -149,6 +157,12 @@ if __name__ == "__main__":
 
     traindir = args.save_dir + "/train"
     valdir = args.save_dir + "/val"
+    
+    if args.encrypted:
+        password = getpass.getpass()
+    
+    else:
+        password = None
 
     if not os.path.isdir(traindir):
         os.mkdir(traindir)
@@ -175,14 +189,14 @@ if __name__ == "__main__":
     )
 
     dataset_train = ToxDataset(
-        read_jsonl_alt(args.train_data),
+        read_jsonl_alt(args.train_data, password),
         text_only=1,
         tokenizer=args.huggingface_model,
         read_img=False,
     )
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=PadCollate())
     dataset_val = ToxDataset(
-        read_jsonl_alt(args.val_data),
+        read_jsonl_alt(args.val_data, password),
         text_only=1,
         tokenizer=args.huggingface_model,
         read_img=False,
