@@ -65,7 +65,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--huggingface_model",
         type=str,
-        default="bart-large",
+        default="facebook/bart-large",
         help="The name of the model to use",
     )
     parser.add_argument(
