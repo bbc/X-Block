@@ -32,18 +32,26 @@
 
 import json
 import pandas as pd
+from .aes import open_file
 
-def read_jsonl(filename, labelled=1, text_only=0):
+def read_jsonl(filename, labelled=1, text_only=0, password=None):
     """
     
     reads data from jsonlines files and creates a dataframe
     input: jsonlfile
     output: dataframe
     """
-
-    with open(filename) as f:
-        records = f.readlines()
-
+    if password is not None:
+        f = open_file(filename, password)
+        records = []
+                
+        for line in f:
+            records.append(line)
+    
+    else:
+        with open(filename) as f:
+            records = f.readlines()
+    
     df = {}
     df["text"] = []
     if not text_only:
@@ -57,19 +65,29 @@ def read_jsonl(filename, labelled=1, text_only=0):
         jdata = json.loads(record)
 
         df["text"].append(str(jdata["text"]))
+        
         if not text_only:
             df["id"].append(jdata["id"])
             df["img"].append(jdata["img"])
+        
         if "label" in jdata and labelled:
             df["label"].append(jdata["label"])
+        
+        elif "failed" in jdata and labelled:
+            df["label"].append(int(jdata["failed"]))
+        
         elif "label" not in jdata and labelled:
             df["label"].append(0)
 
     return pd.DataFrame(df)
 
 
-def read_jsonl_alt(filename):
+def read_jsonl_alt(filename, password=None):
     """Does same as above, but is more flexible in terms of jsonl content
     """
-
-    return pd.DataFrame([json.loads(line) for line in open(filename).readlines()])
+    if password is not None:
+        reader = open_file(filename, password)
+    else:
+        reader = open(filename).readlines()
+    
+    return pd.DataFrame([json.loads(line) for line in reader])
