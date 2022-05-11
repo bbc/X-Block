@@ -4,11 +4,11 @@ click==7.1.2
 filelock==3.0.12
 flask==2.0.2
 idna==2.10
-itsdangerous==1.1.0
-Jinja2==2.11.3
+itsdangerous>=2.0
+Jinja2>=3.0
 joblib==1.0.1
 Keras-Preprocessing==1.1.2
-MarkupSafe==1.1.1
+MarkupSafe>=2.0
 matplotlib==3.4.3
 numpy==1.20.2
 opencv-python==4.5.1.48
@@ -36,4 +36,4 @@ transformers==4.8.2
 typing-extensions==3.10.0.0
 urllib3==1.26.4
 wandb==0.12.6
-Werkzeug==1.0.1
+Werkzeug>=2.0
